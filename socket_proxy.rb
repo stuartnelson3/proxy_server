@@ -18,28 +18,24 @@ class DataDumper
   end
 end
 
-#t1 = Thread.new do
-#  puts 'connecting to endpoint server'
-#  socket_to_endpoint = TCPSocket.new 'localhost', 9000
-#  return_logger = DataDumper.new "return_log"
-#  while received = socket_to_endpoint.gets
-#    return_logger.log_data received
-#  end
-#end
+proxy_server = TCPServer.new 8080
+client = proxy_server.accept
+puts 'starting server on port 8080'
 
-t2 = Thread.new do
-  puts 'starting server on port 8080'
-  proxy_server = TCPServer.new 8080
-  input_logger = DataDumper.new "input_log"
-  client = proxy_server.accept
-  while data = client.gets
-    puts 'from client:', data
-    input_logger.log_data data
-    client.write "received: #{data}"
-  end
+input_logger = DataDumper.new "input_log"
+puts 'connecting to endpoint server'
+return_logger = DataDumper.new "return_log"
+
+while data = client.gets
+  socket_to_endpoint = TCPSocket.new 'localhost', 9000
+  puts 'from client:', data
+  input_logger.log_data data
+  socket_to_endpoint.print data
+  received = socket_to_endpoint.read
+  return_logger.log_data received
+  client.write "received: #{data}"
+  socket_to_endpoint.close
 end
-t2.join
-#[t1, t2].each(&:join)
 
 puts 'done'
 #trap('EXIT') { [return_logger, input_logger].each(&:end_dump); [socket_to_endpoint, server].each(&:close) }
