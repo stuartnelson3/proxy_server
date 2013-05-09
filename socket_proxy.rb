@@ -21,35 +21,45 @@ class DataDumper
   end
 end
 
-proxy_server = TCPServer.new 8080
-loop do
-  Thread.new(proxy_server.accept) do |client|
-    puts 'connection made'
+class ProxyServer
+  attr_reader :proxy_server, :input_logger, :return_logger, :request_logger
+  def initialize port
+    @proxy_server = TCPServer.new port
+    @input_logger = DataDumper.new "input_log"
+    @return_logger = DataDumper.new "return_log"
+    @request_logger = DataDumper.new "request_log"
+  end
 
-    input_logger = DataDumper.new "input_log"
-    return_logger = DataDumper.new "return_log"
-    request_logger = DataDumper.new "request_log"
-    request = ""
-    while data = client.readline
-      puts 'from client:', data
-      input_logger.log_data data
-      request << data
-      if data.strip.empty?
-        request_logger.log_data request
-        socket_to_endpoint = TCPSocket.new 'www.google.com', 80
-        socket_to_endpoint.print request
-        break
+  def run
+    loop do
+      Thread.new(proxy_server.accept) do |client|
+        request = ""
+        while data = client.readline
+          input_logger.log_data data
+          request << data
+          if data.strip.empty?
+            request_logger.log_data request
+            socket_to_endpoint = TCPSocket.new 'www.google.com', 80
+            socket_to_endpoint.print request
+            break
+          end
+        end
+
+        response = socket_to_endpoint.readpartial 1024 * 64
+        client.write response
+        return_logger.log_data response
+
+        close_log_files
+        socket_to_endpoint.close
+        puts 'finished request'
       end
     end
+  end
 
-    response = socket_to_endpoint.readpartial 1024 * 64
-    client.write response
-    return_logger.log_data response
-
+  def close_log_files
     [return_logger, input_logger, request_logger].each(&:end_dump)
-    socket_to_endpoint.close
-    puts 'finished request'
   end
 end
 
-trap('EXIT') { proxy_server.close; puts 'closed proxy server' }
+trap('EXIT') { proxy_server.close }
+ProxyServer.new(8080).run
