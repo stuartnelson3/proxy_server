@@ -7,7 +7,7 @@ class DataDumper
   end
 
   def log_data data
-    @file.write "\n#{@name.upcase}:\n"
+    # @file.write "\n#{@name.upcase}:\n"
     @file.write "#{data}\n"
   end
 
@@ -19,23 +19,34 @@ class DataDumper
 end
 
 proxy_server = TCPServer.new 8080
-client = proxy_server.accept
-puts 'starting server on port 8080'
+loop do
+  Thread.new(proxy_server.accept) do |client|
+    puts 'starting server on port 8080'
 
-input_logger = DataDumper.new "input_log"
-puts 'connecting to endpoint server'
-return_logger = DataDumper.new "return_log"
+    input_logger = DataDumper.new "input_log"
+    puts 'connecting to endpoint server'
+    return_logger = DataDumper.new "return_log"
+    request = ""
+    request_logger = DataDumper.new "request_log"
+    while data = client.gets
+      puts 'from client:', data
+      input_logger.log_data data
+      request << data
+      if data.strip.empty?
+        request_logger.log_data request
+        break
+      end
+      # socket_to_endpoint = TCPSocket.new 'localhost', 4567
+      # socket_to_endpoint.print data
+      # received = socket_to_endpoint.read
+      # return_logger.log_data received
+      # socket_to_endpoint.close
+    end
 
-while data = client.gets
-  socket_to_endpoint = TCPSocket.new 'localhost', 9000
-  puts 'from client:', data
-  input_logger.log_data data
-  socket_to_endpoint.print data
-  received = socket_to_endpoint.read
-  return_logger.log_data received
-  client.write "received: #{data}"
-  socket_to_endpoint.close
+    [return_logger, input_logger, request_logger].each(&:end_dump)
+    socket_to_endpoint.close
+    puts 'finished request'
+  end
 end
 
-puts 'done'
-#trap('EXIT') { [return_logger, input_logger].each(&:end_dump); [socket_to_endpoint, server].each(&:close) }
+trap('INT') { proxy_server.close; puts 'closed proxy server' }
