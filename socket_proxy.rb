@@ -28,20 +28,28 @@ loop do
     return_logger = DataDumper.new "return_log"
     request = ""
     request_logger = DataDumper.new "request_log"
-    while data = client.gets
+    while data = client.readline
       puts 'from client:', data
       input_logger.log_data data
       request << data
       if data.strip.empty?
         request_logger.log_data request
+        socket_to_endpoint = TCPSocket.new 'localhost', 4567
+        socket_to_endpoint.print request
         break
       end
-      # socket_to_endpoint = TCPSocket.new 'localhost', 4567
-      # socket_to_endpoint.print data
       # received = socket_to_endpoint.read
       # return_logger.log_data received
       # socket_to_endpoint.close
     end
+
+    # buff = ""
+    # loop do
+      response = socket_to_endpoint.read #(4048, buff)
+      client.write response #(buff)
+      return_logger.log_data response
+      # break if buff.size < 4048
+    # end
 
     [return_logger, input_logger, request_logger].each(&:end_dump)
     socket_to_endpoint.close
@@ -49,4 +57,4 @@ loop do
   end
 end
 
-trap('INT') { proxy_server.close; puts 'closed proxy server' }
+trap('EXIT') { proxy_server.close; puts 'closed proxy server' }
